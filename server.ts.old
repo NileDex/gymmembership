@@ -1,0 +1,140 @@
+import express from "express";
+import { createServer as createViteServer } from "vite";
+import path from "path";
+import axios from "axios";
+import admin from "firebase-admin";
+import cors from "cors";
+import dotenv from "dotenv";
+
+dotenv.config();
+
+import fs from "fs";
+
+// Load Firebase Config
+const firebaseConfig = JSON.parse(fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8"));
+
+// Initialize Firebase Admin
+try {
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      projectId: firebaseConfig.projectId,
+    });
+  }
+} catch (error) {
+  console.error("Firebase Admin initialization failed", error);
+}
+
+const db = admin.firestore(firebaseConfig.firestoreDatabaseId);
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  app.use(express.json());
+  app.use(cors());
+
+  // Paystack verification endpoint
+  app.post("/api/verify-payment", async (req, res) => {
+    const { reference, userId, planId, durationDays, planName } = req.body;
+
+    if (!reference || !userId || !planId) {
+      return res.status(400).json({ error: "Missing required fields" });
+    }
+
+    try {
+      // Verify with Paystack
+      const secretKey = process.env.PAYSTACK_SECRET_KEY;
+      if (!secretKey) {
+        console.warn("PAYSTACK_SECRET_KEY not found. Using simulation mode.");
+        return await handleSuccess(res, userId, planName, durationDays, reference, planId);
+      }
+
+      const response = await axios.get(
+        `https://api.paystack.co/transaction/verify/${reference}`,
+        {
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+          },
+        }
+      );
+
+      if (response.data.status && response.data.data.status === "success") {
+        await handleSuccess(res, userId, planName, durationDays, reference, planId);
+      } else {
+        res.status(400).json({ error: "Payment verification failed" });
+      }
+    } catch (error) {
+      console.error("Paystack verification error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Paystack Webhook endpoint
+  app.post("/api/paystack-webhook", async (req, res) => {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    
+    // In production, you MUST verify the signature:
+    // const hash = crypto.createHmac('sha512', secret).update(JSON.stringify(req.body)).digest('hex');
+    // if (hash !== req.headers['x-paystack-signature']) return res.status(401).send();
+
+    const event = req.body;
+    
+    if (event.event === "charge.success") {
+      const { reference, metadata, customer } = event.data;
+      const userId = metadata?.referrer; // Assuming you passed this in metadata
+      
+      // We already handle the main logic via /verify-payment for speed,
+      // but the webhook is here as a reliable backup.
+      console.log("Webhook received for successful payment:", reference);
+    }
+    
+    res.status(200).send("Webhook received");
+  });
+
+  async function handleSuccess(res: any, userId: string, planName: string, durationDays: number, reference: string, planId: string) {
+    const userRef = db.collection("users").doc(userId);
+    
+    // Calculate expiry
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + durationDays);
+
+    await userRef.update({
+      membershipStatus: "active",
+      membershipType: planName,
+      membershipExpiry: expiryDate.toISOString(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Record payment
+    await userRef.collection("payments").doc(reference).set({
+      amount: durationDays, // Just a placeholder or pull from paystack
+      reference,
+      status: "success",
+      planId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return res.json({ success: true, message: "Membership updated successfully" });
+  }
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

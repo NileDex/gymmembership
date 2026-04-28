@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* ─── Global Font Override ─────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #fafafa;
+  color: #000;
+}
+
+/* ─── Custom Premium Scrollbar ─────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #e4e4e7;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #d4d4d8;
+}
+
+/* ─── Global Animation Tokens ──────────────────── */
+@keyframes fadeInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(10px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+.animate-in { 
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; 
+}
+
+/* ─── Component Utilities ─────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 30;
+  backdrop-filter: blur(4px);
+}
+
+/* Fix for aggressive tailwind resets if any */
+button {
+  cursor: pointer;
+}
+
+/* Premium Typography Baseline */
+h1, h2, h3, h4 {
+  letter-spacing: -0.02em;
+}
