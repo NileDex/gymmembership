@@ -17,13 +17,25 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); // Crit
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 
+let isAuthActionPending = false;
+
 export async function signInWithGoogle() {
+  if (isAuthActionPending) return;
+  isAuthActionPending = true;
+
   try {
+    // We use signInWithRedirect to avoid popup blockers.
+    // The Internal Assertion error "Pending promise was never set" usually happens 
+    // when multiple auth actions are triggered before the first one completes.
     await signInWithRedirect(auth, googleProvider);
-    // Note: signInWithRedirect does not return a user immediately.
-    // The page will redirect to Google, then redirect back to your app.
-    // The useAuthState hook in your components will automatically detect the sign in upon return.
-  } catch (error) {
+  } catch (error: any) {
+    isAuthActionPending = false;
+    
+    // Ignore common errors that don't need to be logged as "Uncaught"
+    if (error.code === 'auth/popup-blocked' || error.code === 'auth/cancelled-popup-request') {
+      return;
+    }
+    
     console.error("Error signing in with Google", error);
     throw error;
   }
