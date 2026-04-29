@@ -17,11 +17,15 @@ const ADMIN_EMAILS = ['josephakpansunday@gmail.com', 'columnwallet@gmail.com'];
 
 function App() {
   const [user, loading] = useAuthState(auth);
+  const [signInError, setSignInError] = useState<'popup-blocked' | 'unknown' | null>(null);
 
   // Handle the redirect result when the user returns from Google sign-in
   useEffect(() => {
     getRedirectResult(auth).catch((error) => {
-      if (error.code !== 'auth/cancelled-popup-request' && error.code !== 'auth/popup-blocked') {
+      // auth/internal-error fires when there's no pending redirect (normal for popup sign-in)
+      // auth/cancelled-popup-request and auth/popup-blocked are also harmless here
+      const silenced = ['auth/internal-error', 'auth/cancelled-popup-request', 'auth/popup-blocked'];
+      if (!silenced.includes(error.code)) {
         console.error('Redirect sign-in error:', error);
       }
     });
@@ -121,10 +125,30 @@ function App() {
           <div className="w-16 h-16 bg-black rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-lg">
             <span className="text-white font-bold text-xl">IG</span>
           </div>
-          <h1 className="text-3xl font-light tracking-tight text-zinc-900 mb-2">Iron & Grit</h1>
+          <h1 className="text-3xl font-light tracking-tight text-zinc-900 mb-2">Iron &amp; Grit</h1>
           <p className="text-zinc-500 mb-10 text-sm">Sign in to access your dashboard and training materials.</p>
+
+          {signInError === 'popup-blocked' && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-left">
+              <p className="text-sm font-semibold text-amber-800 mb-1">Popup blocked by browser</p>
+              <p className="text-xs text-amber-700 leading-relaxed">
+                Your browser blocked the sign-in popup. Please click the <strong>popup blocked</strong> icon in your address bar and select <strong>"Always allow popups from this site"</strong>, then try again.
+              </p>
+            </div>
+          )}
+          {signInError === 'unknown' && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-left">
+              <p className="text-sm font-semibold text-red-800 mb-1">Sign-in failed</p>
+              <p className="text-xs text-red-700">Something went wrong. Please try again.</p>
+            </div>
+          )}
+
           <button 
-            onClick={signInWithGoogle}
+            onClick={async () => {
+              setSignInError(null);
+              const result = await signInWithGoogle();
+              if (result?.error) setSignInError(result.error);
+            }}
             className="w-full flex items-center justify-center gap-3 bg-white border border-zinc-200 text-black py-4 rounded-2xl font-medium hover:bg-zinc-50 transition-all shadow-sm"
           >
             <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />
