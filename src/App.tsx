@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { auth, db, signInWithGoogle } from './lib/firebase';
+import { getRedirectResult } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -16,6 +17,15 @@ const ADMIN_EMAILS = ['josephakpansunday@gmail.com', 'columnwallet@gmail.com'];
 
 function App() {
   const [user, loading] = useAuthState(auth);
+
+  // Handle the redirect result when the user returns from Google sign-in
+  useEffect(() => {
+    getRedirectResult(auth).catch((error) => {
+      if (error.code !== 'auth/cancelled-popup-request' && error.code !== 'auth/popup-blocked') {
+        console.error('Redirect sign-in error:', error);
+      }
+    });
+  }, []);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [currentPage, setCurrentPage] = useState<'dashboard' | 'plans' | 'admin' | 'profile'>('dashboard');
   const [showNotifications, setShowNotifications] = useState(false);
